@@ -60,7 +60,8 @@ export async function getBrandingOutput(input: BrandingInput): Promise<BrandingO
     
   } catch (error) {
     console.error('Error calling OpenAI:', error);
-    throw new Error('Failed to generate branding output');
+    const message = (error as Error)?.message || 'Unknown error';
+    throw new Error(`Failed to generate branding output: ${message}`);
   }
 }
 
