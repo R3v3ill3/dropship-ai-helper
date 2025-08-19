@@ -61,46 +61,49 @@ export async function POST(request: NextRequest) {
     const brandingOutput = await getBrandingOutput(brandingInput);
 
     // Store project in database
-    // First try with brand_tone column
+    // First attempt with brand_tone; if Supabase returns a schema cache error (PGRST204)
+    // or unknown column (42703), retry without brand_tone
     let project, projectError;
-    
-    try {
-      const result = await supabase
+
+    const initialInsert = await supabase
+      .from('projects')
+      .insert({
+        user_id: userId,
+        product_name: product,
+        product_description: product, // Using product as description for now
+        target_persona: persona,
+        locality: location,
+        brand_tone: tone
+      })
+      .select()
+      .single();
+
+    project = initialInsert.data;
+    projectError = initialInsert.error as any;
+
+    // Detect brand_tone issues returned as result errors (not thrown exceptions)
+    const isBrandToneMissing = !!projectError && (
+      projectError.code === 'PGRST204' || // PostgREST schema cache says column missing
+      projectError.code === '42703' || // Postgres undefined_column
+      /brand_tone/i.test(projectError.message || '')
+    );
+
+    if (isBrandToneMissing) {
+      console.log("'brand_tone' column not available; retrying insert without it");
+      const fallbackResult = await supabase
         .from('projects')
         .insert({
           user_id: userId,
           product_name: product,
-          product_description: product, // Using product as description for now
+          product_description: product,
           target_persona: persona,
-          locality: location,
-          brand_tone: tone
+          locality: location
         })
         .select()
         .single();
-      
-      project = result.data;
-      projectError = result.error;
-    } catch (error) {
-      // If brand_tone column doesn't exist, try without it
-      if (error && (error as any).code === 'PGRST204') {
-        console.log('brand_tone column not found, inserting without it');
-        const fallbackResult = await supabase
-          .from('projects')
-          .insert({
-            user_id: userId,
-            product_name: product,
-            product_description: product,
-            target_persona: persona,
-            locality: location
-          })
-          .select()
-          .single();
-        
-        project = fallbackResult.data;
-        projectError = fallbackResult.error;
-      } else {
-        throw error;
-      }
+
+      project = fallbackResult.data;
+      projectError = fallbackResult.error;
     }
 
     if (projectError) {
