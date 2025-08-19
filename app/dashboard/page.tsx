@@ -14,7 +14,7 @@ interface Project {
   product_name: string;
   target_persona: string;
   locality: string;
-  brand_tone: string;
+  brand_tone?: string; // Optional in case column doesn't exist yet
   created_at: string;
 }
 
@@ -182,7 +182,7 @@ export default function Dashboard() {
                             <span className="font-medium">Location:</span> {project.locality}
                           </div>
                           <div>
-                            <span className="font-medium">Tone:</span> {project.brand_tone}
+                            <span className="font-medium">Tone:</span> {project.brand_tone || 'Not specified'}
                           </div>
                         </div>
                         <p className="text-xs text-gray-500 mt-2">

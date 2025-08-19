@@ -22,7 +22,7 @@ export interface Project {
   product_description: string;
   target_persona: string;
   locality: string;
-  brand_tone: string;
+  brand_tone?: string; // Optional in case column doesn't exist yet
   created_at: string;
 }
 
