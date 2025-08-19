@@ -11,6 +11,13 @@ export async function POST(request: NextRequest) {
       ? authorizationHeader.substring('Bearer '.length)
       : undefined;
 
+    // Quick env sanity checks to surface configuration issues early
+    const openaiApiKey = process.env.OPENAI_API_KEY;
+    if (!openaiApiKey) {
+      console.error('Missing environment variable: OPENAI_API_KEY');
+      return NextResponse.json({ error: 'Server misconfiguration: missing OPENAI_API_KEY' }, { status: 500 });
+    }
+
     // Create a per-request Supabase client bound to the user's access token for RLS
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -70,7 +77,7 @@ export async function POST(request: NextRequest) {
     if (projectError) {
       console.error('Error creating project:', projectError);
       return NextResponse.json(
-        { error: 'Failed to save project' },
+        { error: 'Failed to save project', details: projectError.message },
         { status: 500 }
       );
     }
@@ -94,7 +101,7 @@ export async function POST(request: NextRequest) {
     if (outputError) {
       console.error('Error creating output:', outputError);
       return NextResponse.json(
-        { error: 'Failed to save output' },
+        { error: 'Failed to save output', details: outputError.message },
         { status: 500 }
       );
     }
@@ -108,10 +115,8 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error in generate-branding API:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    const message = (error as Error)?.message || 'Internal server error';
+    return NextResponse.json({ error: 'Internal server error', details: message }, { status: 500 });
   }
 }
 
