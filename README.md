@@ -220,6 +220,23 @@ Modify `tailwind.config.js` and `app/globals.css` for custom styling
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
+## Troubleshooting
+
+### Database Issues
+If you encounter database-related errors like "Could not find the 'brand_tone' column", see the [DATABASE_TROUBLESHOOTING.md](DATABASE_TROUBLESHOOTING.md) guide.
+
+### Common Issues
+
+#### Node.js Version Warning
+If you see Node.js deprecation warnings, ensure you're using Node.js 20+:
+- The project includes `.nvmrc` and Railway configuration for Node.js 20.11.0
+- Run `npm run verify-db` to test your database connection
+
+#### API Errors
+- Check Railway logs for detailed error messages
+- Verify all environment variables are set correctly
+- Ensure your Supabase database schema is properly set up
+
 ## Support
 
 For support, email support@dropshipai.com or create an issue in this repository.

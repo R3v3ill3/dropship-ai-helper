@@ -25,9 +25,14 @@ export async function POST(request: NextRequest) {
       console.error('Supabase environment variables are not set');
       return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
     }
+    
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: {
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+      },
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
       }
     });
 
@@ -60,7 +65,30 @@ export async function POST(request: NextRequest) {
 
     const brandingOutput = await getBrandingOutput(brandingInput);
 
+    // First, let's verify the table structure exists
+    const { data: tableCheck, error: tableError } = await supabase
+      .from('projects')
+      .select('*')
+      .limit(0);
+
+    if (tableError) {
+      console.error('Error checking projects table structure:', tableError);
+      return NextResponse.json(
+        { error: 'Database schema issue', details: tableError.message, code: tableError.code },
+        { status: 500 }
+      );
+    }
+
     // Store project in database
+    console.log('Attempting to insert project with data:', {
+      user_id: userId,
+      product_name: product,
+      product_description: product,
+      target_persona: persona,
+      locality: location,
+      brand_tone: tone
+    });
+
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
@@ -75,9 +103,19 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (projectError) {
-      console.error('Error creating project:', projectError);
+      console.error('Error creating project:', {
+        message: projectError.message,
+        details: projectError.details,
+        hint: projectError.hint,
+        code: projectError.code
+      });
       return NextResponse.json(
-        { error: 'Failed to save project', details: projectError.message },
+        { 
+          error: 'Failed to save project', 
+          details: projectError.message,
+          code: projectError.code,
+          hint: projectError.hint
+        },
         { status: 500 }
       );
     }
