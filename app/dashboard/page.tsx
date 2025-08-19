@@ -5,7 +5,7 @@ import { useAuth } from '../../lib/auth-context';
 import Form from '../../components/Form';
 import OutputDisplay from '../../components/OutputDisplay';
 import { BrandingOutput } from '../../prompts/branding';
-import { supabase } from '../../lib/supabase';
+import { getSupabaseClient } from '../../lib/supabase';
 import { LogOut, Plus, History, Sparkles } from 'lucide-react';
 import Link from 'next/link';
 
@@ -33,7 +33,7 @@ export default function Dashboard() {
 
   const fetchProjects = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from('projects')
         .select('*')
         .eq('user_id', user?.id)
@@ -51,10 +51,14 @@ export default function Dashboard() {
 
     setLoading(true);
     try {
+      const { data: { session } } = await getSupabaseClient().auth.getSession();
+      const accessToken = session?.access_token;
+
       const response = await fetch('/api/generate-branding', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({
           product: formData.product,
