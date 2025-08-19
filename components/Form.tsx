@@ -11,8 +11,12 @@ interface FormData {
   tone: string;
 }
 
+interface FormSubmitData extends FormData {
+  location: string;
+}
+
 interface FormProps {
-  onSubmit: (data: FormData) => void;
+  onSubmit: (data: FormSubmitData) => void;
   loading: boolean;
 }
 
@@ -192,3 +196,4 @@ export default function Form({ onSubmit, loading }: FormProps) {
     </div>
   );
 }
+

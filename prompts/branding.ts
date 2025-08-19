@@ -54,3 +54,4 @@ Make sure the brand name, tagline, and copy are:
 
 Return only valid JSON, no additional text.`;
 }
+

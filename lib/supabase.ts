@@ -6,11 +6,6 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Database types
-export interface User {
-  id: string;
-  email: string;
-  created_at: string;
-}
 
 export interface Project {
   id: string;
@@ -35,3 +30,4 @@ export interface Output {
   budget_strategy: string;
   created_at: string;
 }
+

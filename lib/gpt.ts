@@ -58,3 +58,4 @@ export async function getBrandingOutput(input: BrandingInput): Promise<BrandingO
     throw new Error('Failed to generate branding output');
   }
 }
+

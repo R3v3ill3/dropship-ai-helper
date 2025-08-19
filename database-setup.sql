@@ -83,3 +83,4 @@ CREATE INDEX IF NOT EXISTS idx_outputs_created_at ON outputs(created_at);
 GRANT ALL ON projects TO authenticated;
 GRANT ALL ON outputs TO authenticated;
 GRANT USAGE ON SCHEMA public TO authenticated;
+

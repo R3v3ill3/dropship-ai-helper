@@ -164,3 +164,4 @@ export default function OutputDisplay({ output, onRegenerate, loading }: OutputD
     </div>
   );
 }
+

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, User } from './supabase';
+import { supabase } from './supabase';
+import { User } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
@@ -80,3 +81,4 @@ export function useAuth() {
   }
   return context;
 }
+

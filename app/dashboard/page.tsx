@@ -46,7 +46,7 @@ export default function Dashboard() {
     }
   };
 
-  const handleFormSubmit = async (formData: any) => {
+  const handleFormSubmit = async (formData: { product: string; persona: string; tone: string; location: string }) => {
     if (!user) return;
 
     setLoading(true);
@@ -212,3 +212,4 @@ export default function Dashboard() {
     </div>
   );
 }
+
