@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Store project in database
+    // Store project in database with fallback logic
     console.log('Attempting to insert project with data:', {
       user_id: userId,
       product_name: product,
@@ -89,18 +89,47 @@ export async function POST(request: NextRequest) {
       brand_tone: tone
     });
 
-    const { data: project, error: projectError } = await supabase
-      .from('projects')
-      .insert({
-        user_id: userId,
-        product_name: product,
-        product_description: product, // Using product as description for now
-        target_persona: persona,
-        locality: location,
-        brand_tone: tone
-      })
-      .select()
-      .single();
+    // First try with brand_tone column
+    let project, projectError;
+    
+    try {
+      const result = await supabase
+        .from('projects')
+        .insert({
+          user_id: userId,
+          product_name: product,
+          product_description: product, // Using product as description for now
+          target_persona: persona,
+          locality: location,
+          brand_tone: tone
+        })
+        .select()
+        .single();
+      
+      project = result.data;
+      projectError = result.error;
+    } catch (error) {
+      // If brand_tone column doesn't exist, try without it
+      if (error && (error as any).code === 'PGRST204') {
+        console.log('brand_tone column not found, inserting without it');
+        const fallbackResult = await supabase
+          .from('projects')
+          .insert({
+            user_id: userId,
+            product_name: product,
+            product_description: product,
+            target_persona: persona,
+            locality: location
+          })
+          .select()
+          .single();
+        
+        project = fallbackResult.data;
+        projectError = fallbackResult.error;
+      } else {
+        throw error;
+      }
+    }
 
     if (projectError) {
       console.error('Error creating project:', {
