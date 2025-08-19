@@ -1,16 +1,20 @@
 import OpenAI from 'openai';
 import { generateBrandingPrompt, BrandingInput, BrandingOutput } from '../prompts/branding';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 export async function getBrandingOutput(input: BrandingInput): Promise<BrandingOutput> {
   try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('Missing OpenAI API key');
+    }
+    const openai = new OpenAI({ apiKey });
+    const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    const temperature = process.env.OPENAI_TEMPERATURE ? Number(process.env.OPENAI_TEMPERATURE) : 0.7;
+    const maxTokens = process.env.OPENAI_MAX_TOKENS ? Number(process.env.OPENAI_MAX_TOKENS) : 1200;
     const prompt = generateBrandingPrompt(input);
     
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model,
       messages: [
         {
           role: "system",
@@ -21,8 +25,9 @@ export async function getBrandingOutput(input: BrandingInput): Promise<BrandingO
           content: prompt
         }
       ],
-      temperature: 0.8,
-      max_tokens: 1000,
+      temperature,
+      max_tokens: maxTokens,
+      response_format: { type: 'json_object' }
     });
 
     const response = completion.choices[0]?.message?.content;

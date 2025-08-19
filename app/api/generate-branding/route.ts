@@ -1,10 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBrandingOutput } from '../../../lib/gpt';
-import { supabase } from '../../../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 import { BrandingInput } from '../../../prompts/branding';
 
 export async function POST(request: NextRequest) {
   try {
+    // Extract bearer token from Authorization header
+    const authorizationHeader = request.headers.get('authorization') || request.headers.get('Authorization');
+    const accessToken = authorizationHeader?.startsWith('Bearer ')
+      ? authorizationHeader.substring('Bearer '.length)
+      : undefined;
+
+    // Create a per-request Supabase client bound to the user's access token for RLS
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.error('Supabase environment variables are not set');
+      return NextResponse.json({ error: 'Server misconfiguration' }, { status: 500 });
+    }
+    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
+      }
+    });
+
     const body = await request.json();
     const { product, persona, tone, location, userId } = body;
 
@@ -13,6 +32,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
+      );
+    }
+
+    // Ensure we have a user token to satisfy RLS on inserts
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'Unauthorized: missing access token' },
+        { status: 401 }
       );
     }
 
