@@ -70,7 +70,12 @@ export default function Dashboard() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate branding');
+        let serverDetails = '';
+        try {
+          const errJson = await response.json();
+          serverDetails = errJson?.details || errJson?.error || JSON.stringify(errJson);
+        } catch {}
+        throw new Error(`Failed to generate branding (HTTP ${response.status})${serverDetails ? `: ${serverDetails}` : ''}`);
       }
 
       const result = await response.json();
@@ -78,7 +83,7 @@ export default function Dashboard() {
       await fetchProjects(); // Refresh projects list
     } catch (error) {
       console.error('Error generating branding:', error);
-      alert('Failed to generate branding. Please try again.');
+      alert(String(error));
     } finally {
       setLoading(false);
     }

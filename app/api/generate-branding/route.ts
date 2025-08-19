@@ -91,28 +91,29 @@ export async function POST(request: NextRequest) {
     });
 
 
-    // First try with brand_tone column
+    // First try with brand_tone column; if unknown column error, retry without it
     let project, projectError;
+    const result = await supabase
+      .from('projects')
+      .insert({
+        user_id: userId,
+        product_name: product,
+        product_description: product, // Using product as description for now
+        target_persona: persona,
+        locality: location,
+        brand_tone: tone
+      })
+      .select()
+      .single();
     
-    try {
-      const result = await supabase
-        .from('projects')
-        .insert({
-          user_id: userId,
-          product_name: product,
-          product_description: product, // Using product as description for now
-          target_persona: persona,
-          locality: location,
-          brand_tone: tone
-        })
-        .select()
-        .single();
-      
-      project = result.data;
-      projectError = result.error;
-    } catch (error) {
-      // If brand_tone column doesn't exist, try without it
-      if (error && (error as any).code === 'PGRST204') {
+    project = result.data;
+    projectError = result.error;
+
+    if (projectError) {
+      const message = projectError.message || '';
+      const code = projectError.code || '';
+      const isMissingColumn = code === 'PGRST204' || code === '42703' || /column\s+"?brand_tone"?\s+does not exist/i.test(message) || /unknown column/i.test(message);
+      if (isMissingColumn) {
         console.log('brand_tone column not found, inserting without it');
         const fallbackResult = await supabase
           .from('projects')
@@ -125,11 +126,8 @@ export async function POST(request: NextRequest) {
           })
           .select()
           .single();
-        
         project = fallbackResult.data;
         projectError = fallbackResult.error;
-      } else {
-        throw error;
       }
     }
 
