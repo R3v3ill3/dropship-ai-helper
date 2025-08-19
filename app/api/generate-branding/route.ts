@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
 
     const brandingOutput = await getBrandingOutput(brandingInput);
 
+
     // First, let's verify the table structure exists
     const { data: tableCheck, error: tableError } = await supabase
       .from('projects')
@@ -88,6 +89,7 @@ export async function POST(request: NextRequest) {
       locality: location,
       brand_tone: tone
     });
+
 
     // First try with brand_tone column
     let project, projectError;
