@@ -1,17 +1,22 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { getSupabaseClient } from '../lib/supabase';
 
-interface FormData {
+interface FormState {
   product: string;
   description: string;
-  persona: string;
+  persona: string[]; // multiple selected personas
   suburb: string;
   postcode: string;
   tone: string;
 }
 
-interface FormSubmitData extends FormData {
+interface FormSubmitData {
+  product: string;
+  description: string;
+  persona: string; // comma-separated for API compatibility
+  tone: string;
   location: string;
 }
 
@@ -20,7 +25,7 @@ interface FormProps {
   loading: boolean;
 }
 
-const HELIX_PERSONAS = [
+const HELIX_PERSONAS_FALLBACK = [
   'Socially Aware Urbanites',
   'Rural Traditionalists',
   'Affluent and Ambitious',
@@ -47,29 +52,81 @@ const BRAND_TONES = [
 ];
 
 export default function Form({ onSubmit, loading }: FormProps) {
-  const [formData, setFormData] = useState<FormData>({
+  const [formData, setFormData] = useState<FormState>({
     product: '',
     description: '',
-    persona: '',
+    persona: [],
     suburb: '',
     postcode: '',
     tone: ''
   });
 
+  const [personaOptions, setPersonaOptions] = useState<string[]>(HELIX_PERSONAS_FALLBACK);
+  const [loadingPersonas, setLoadingPersonas] = useState<boolean>(false);
+
+  useEffect(() => {
+    async function fetchPersonaSegments() {
+      try {
+        setLoadingPersonas(true);
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase
+          .from('helix_persona_segments')
+          .select('*');
+        if (error) throw error;
+        const rows: any[] = Array.isArray(data) ? data : [];
+        // Try common field names to derive a display label
+        const labels = rows
+          .map((row) => {
+            return (
+              row.name ||
+              row.segment_name ||
+              row.label ||
+              row.title ||
+              row.code ||
+              row.slug ||
+              undefined
+            );
+          })
+          .filter((v) => typeof v === 'string') as string[];
+        if (labels.length > 0) {
+          // Deduplicate while preserving order
+          const seen = new Set<string>();
+          const uniqueLabels = labels.filter((l) => (seen.has(l) ? false : (seen.add(l), true)));
+          setPersonaOptions(uniqueLabels);
+        }
+      } catch (err) {
+        // Fall back to built-in list silently
+        console.error('Failed to load helix_persona_segments; using fallback list', err);
+      } finally {
+        setLoadingPersonas(false);
+      }
+    }
+    fetchPersonaSegments();
+  }, []);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const location = `${formData.suburb}, ${formData.postcode}`;
+    const personaJoined = formData.persona.join(', ');
     onSubmit({
-      ...formData,
+      product: formData.product,
+      description: formData.description,
+      persona: personaJoined,
+      tone: formData.tone,
       location
     });
   };
 
-  const handleChange = (field: keyof FormData, value: string) => {
+  const handleChange = (field: keyof FormState, value: string) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+  };
+
+  const handlePersonaChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedValues = Array.from(event.target.selectedOptions).map(opt => opt.value);
+    setFormData(prev => ({ ...prev, persona: selectedValues }));
   };
 
   return (
@@ -112,22 +169,26 @@ export default function Form({ onSubmit, loading }: FormProps) {
         {/* Target Audience */}
         <div>
           <label htmlFor="persona" className="block text-sm font-medium text-gray-700 mb-2">
-            Target Helix Persona *
+            Target Helix Persona Segments *
           </label>
           <select
             id="persona"
+            multiple
+            size={Math.min(8, Math.max(4, personaOptions.length))}
             value={formData.persona}
-            onChange={(e) => handleChange('persona', e.target.value)}
+            onChange={handlePersonaChange}
             className="input-field"
             required
           >
-            <option value="">Select a persona</option>
-            {HELIX_PERSONAS.map((persona) => (
+            {personaOptions.map((persona) => (
               <option key={persona} value={persona}>
                 {persona}
               </option>
             ))}
           </select>
+          <p className="mt-1 text-xs text-gray-500">
+            {loadingPersonas ? 'Loading persona segments…' : 'Select one or more persona segments that fit your audience.'}
+          </p>
         </div>
 
         {/* Location */}
