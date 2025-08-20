@@ -10,6 +10,7 @@ interface FormState {
   suburb: string;
   postcode: string;
   tone: string;
+  websiteUrl?: string;
 }
 
 interface FormSubmitData {
@@ -65,7 +66,8 @@ export default function Form({ onSubmit, loading }: FormProps) {
     persona: [],
     suburb: '',
     postcode: '',
-    tone: ''
+    tone: '',
+    websiteUrl: ''
   });
 
   const [personaOptions, setPersonaOptions] = useState<HelixSegment[]>(
@@ -73,6 +75,9 @@ export default function Form({ onSubmit, loading }: FormProps) {
   );
   const [loadingPersonas, setLoadingPersonas] = useState<boolean>(false);
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [analyzingUrl, setAnalyzingUrl] = useState<boolean>(false);
+  const [analysisNote, setAnalysisNote] = useState<string>('');
+  const [customSegmentLabel, setCustomSegmentLabel] = useState<string>('');
 
   useEffect(() => {
     async function fetchPersonaSegments() {
@@ -127,6 +132,66 @@ export default function Form({ onSubmit, loading }: FormProps) {
     }));
   };
 
+  const analyzeWebsite = async () => {
+    if (!formData.websiteUrl || !formData.websiteUrl.trim()) return;
+    try {
+      setAnalyzingUrl(true);
+      setAnalysisNote('');
+      const available = personaOptions.map(s => s.label);
+      const res = await fetch('/api/analyze-website', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: formData.websiteUrl.trim(),
+          availableSegments: available,
+          locale: `${formData.suburb}, ${formData.postcode}`.trim(),
+          topN: 3
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to analyze website');
+      }
+      const recommended: string[] = Array.isArray(data.recommendedSegments) ? data.recommendedSegments : [];
+      const reasons: string = typeof data.reasoningSummary === 'string' ? data.reasoningSummary : '';
+      // Map labels back to IDs (case-insensitive)
+      const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
+      const labelToId = new Map(personaOptions.map(s => [s.label, s.id] as const));
+      const findIdByLabel = (label: string) => {
+        // exact first
+        if (labelToId.has(label)) return labelToId.get(label)!;
+        // case-insensitive lookup
+        const match = personaOptions.find(s => collator.compare(s.label, label) === 0);
+        return match ? match.id : label; // fall back to using label as id for custom
+      };
+      const ids = recommended.map(findIdByLabel);
+      // If any are custom (id equals label and not present), add to options
+      const existingIds = new Set(personaOptions.map(s => s.id));
+      const toAdd = ids.filter(id => !existingIds.has(id));
+      if (toAdd.length > 0) {
+        setPersonaOptions(prev => ([
+          ...prev,
+          ...toAdd.map(label => ({ id: label, label, groupName: 'Custom' as const }))
+        ]));
+      }
+      // Preselect recommended segments as defaults
+      setFormData(prev => ({
+        ...prev,
+        persona: Array.from(new Set([...(prev.persona || []), ...ids]))
+      }));
+      if (recommended.length > 0) {
+        setAnalysisNote(`Recommended segments: ${recommended.join(', ')}${reasons ? ` — ${reasons}` : ''}`);
+      } else {
+        setAnalysisNote('No clear segments detected from the provided URL.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAnalysisNote(err?.message || 'Failed to analyze website');
+    } finally {
+      setAnalyzingUrl(false);
+    }
+  };
+
   const uniqueGroupNames = React.useMemo(() => {
     const names = new Set<string>();
     for (const seg of personaOptions) {
@@ -179,6 +244,33 @@ export default function Form({ onSubmit, loading }: FormProps) {
       </h2>
       
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Website URL Analyzer */}
+        <div>
+          <label htmlFor="websiteUrl" className="block text-sm font-medium text-gray-700 mb-2">
+            Website URL (optional)
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="url"
+              id="websiteUrl"
+              value={formData.websiteUrl || ''}
+              onChange={(e) => handleChange('websiteUrl', e.target.value)}
+              className="input-field flex-1"
+              placeholder="https://yourstore.com"
+            />
+            <button
+              type="button"
+              onClick={analyzeWebsite}
+              disabled={analyzingUrl || !formData.websiteUrl}
+              className="btn-secondary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {analyzingUrl ? 'Analyzing…' : 'Analyze URL'}
+            </button>
+          </div>
+          {analysisNote && (
+            <p className="mt-2 text-xs text-gray-600">{analysisNote}</p>
+          )}
+        </div>
         {/* Product Information */}
         <div>
           <label htmlFor="product" className="block text-sm font-medium text-gray-700 mb-2">
@@ -214,6 +306,35 @@ export default function Form({ onSubmit, loading }: FormProps) {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Target Helix Persona Segments *
           </label>
+          {/* Add Custom Segment */}
+          <div className="mb-3">
+            <div className="text-xs font-medium text-gray-600 mb-1">Add custom segment</div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={customSegmentLabel}
+                onChange={(e) => setCustomSegmentLabel(e.target.value)}
+                className="input-field flex-1"
+                placeholder="Enter a custom segment label"
+              />
+              <button
+                type="button"
+                className="btn-secondary px-3"
+                onClick={() => {
+                  const label = customSegmentLabel.trim();
+                  if (!label) return;
+                  const exists = personaOptions.some(s => s.label.toLowerCase() === label.toLowerCase());
+                  if (!exists) {
+                    setPersonaOptions(prev => ([...prev, { id: label, label, groupName: 'Custom' }]));
+                  }
+                  setFormData(prev => ({ ...prev, persona: Array.from(new Set([...(prev.persona || []), label])) }));
+                  setCustomSegmentLabel('');
+                }}
+              >
+                Add
+              </button>
+            </div>
+          </div>
           {/* Group Filters */}
           <div className="mb-3">
             <div className="text-xs font-medium text-gray-600 mb-1">Filter by Group</div>
