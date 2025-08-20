@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { generateBrandingPrompt, BrandingInput, BrandingOutput } from '../prompts/branding';
+import { generateSegmentRecommendationPrompt } from '../prompts/recommendSegments';
 
 export async function getBrandingOutput(input: BrandingInput): Promise<BrandingOutput> {
   try {
@@ -145,6 +146,97 @@ export async function getBrandingOutput(input: BrandingInput): Promise<BrandingO
       'Unknown error';
     console.error('Error calling OpenAI:', apiErrorMessage);
     throw new Error(`Failed to generate branding output: ${apiErrorMessage}`);
+  }
+}
+
+export interface SegmentRecommendationResult {
+  recommendedSegments: string[];
+  reasoningSummary?: string;
+}
+
+export async function recommendSegmentsFromWebsite(params: {
+  websiteText: string;
+  availableSegments: string[];
+  locale?: string;
+  topN?: number;
+}): Promise<SegmentRecommendationResult> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('Missing OpenAI API key');
+  }
+  const openai = new OpenAI({ apiKey });
+  const envModel = (process.env.OPENAI_MODEL || '').trim();
+  const supportedModels = new Set<string>([
+    'gpt-4o-mini',
+    'gpt-4o',
+    'gpt-4.1-mini',
+    'gpt-4.1'
+  ]);
+  const model = supportedModels.has(envModel) ? envModel : 'gpt-4o';
+  const temperature = process.env.OPENAI_TEMPERATURE ? Number(process.env.OPENAI_TEMPERATURE) : 0.3;
+  const maxTokens = process.env.OPENAI_MAX_TOKENS ? Number(process.env.OPENAI_MAX_TOKENS) : 1200;
+
+  const prompt = generateSegmentRecommendationPrompt({
+    websiteText: params.websiteText,
+    helixSegments: params.availableSegments,
+    locale: params.locale ?? 'Australia',
+    topN: params.topN ?? 3
+  });
+
+  let response: string | null = null;
+  try {
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: 'You are a market segmentation expert. Output strictly valid JSON.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature,
+      max_tokens: maxTokens,
+      response_format: { type: 'json_object' }
+    });
+    response = completion.choices[0]?.message?.content ?? null;
+  } catch (jsonModeError: any) {
+    const msg = jsonModeError?.response?.data?.error?.message || jsonModeError?.message || '';
+    const indicatesUnsupported = /response_format|json(\s|-)?mode|not supported|Unsupported/i.test(msg);
+    if (!indicatesUnsupported) {
+      throw jsonModeError;
+    }
+    const completion = await openai.chat.completions.create({
+      model,
+      messages: [
+        { role: 'system', content: 'You are a market segmentation expert. Output strictly valid JSON.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature,
+      max_tokens: maxTokens
+    });
+    response = completion.choices[0]?.message?.content ?? null;
+  }
+
+  if (!response) {
+    throw new Error('No response from OpenAI');
+  }
+
+  try {
+    let parsed: any;
+    try {
+      parsed = JSON.parse(response);
+    } catch (e) {
+      const firstBrace = response.indexOf('{');
+      const lastBrace = response.lastIndexOf('}');
+      if (firstBrace >= 0 && lastBrace > firstBrace) {
+        parsed = JSON.parse(response.slice(firstBrace, lastBrace + 1));
+      } else {
+        throw e;
+      }
+    }
+    const rec = Array.isArray(parsed.recommendedSegments) ? parsed.recommendedSegments.map((s: any) => String(s).trim()).filter(Boolean) : [];
+    const reasoning = typeof parsed.reasoningSummary === 'string' ? parsed.reasoningSummary : undefined;
+    return { recommendedSegments: rec, reasoningSummary: reasoning };
+  } catch (e) {
+    console.error('Failed to parse segment recommendation:', response);
+    throw new Error('Invalid response format from AI');
   }
 }
 
