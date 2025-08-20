@@ -25,6 +25,13 @@ interface FormProps {
   loading: boolean;
 }
 
+interface HelixSegment {
+  id: string;
+  label: string;
+  groupName?: string;
+  description?: string;
+}
+
 const HELIX_PERSONAS_FALLBACK = [
   'Socially Aware Urbanites',
   'Rural Traditionalists',
@@ -61,7 +68,9 @@ export default function Form({ onSubmit, loading }: FormProps) {
     tone: ''
   });
 
-  const [personaOptions, setPersonaOptions] = useState<string[]>(HELIX_PERSONAS_FALLBACK);
+  const [personaOptions, setPersonaOptions] = useState<HelixSegment[]>(
+    HELIX_PERSONAS_FALLBACK.map((label) => ({ id: label, label }))
+  );
   const [loadingPersonas, setLoadingPersonas] = useState<boolean>(false);
 
   useEffect(() => {
@@ -70,33 +79,22 @@ export default function Form({ onSubmit, loading }: FormProps) {
         setLoadingPersonas(true);
         const supabase = getSupabaseClient();
         const { data, error } = await supabase
-          .from('helix_persona_segments')
-          .select('*');
+          .from('helix_segments')
+          .select('id,label,group_name,description');
         if (error) throw error;
         const rows: any[] = Array.isArray(data) ? data : [];
-        // Try common field names to derive a display label
-        const labels = rows
-          .map((row) => {
-            return (
-              row.name ||
-              row.segment_name ||
-              row.label ||
-              row.title ||
-              row.code ||
-              row.slug ||
-              undefined
-            );
-          })
-          .filter((v) => typeof v === 'string') as string[];
-        if (labels.length > 0) {
-          // Deduplicate while preserving order
-          const seen = new Set<string>();
-          const uniqueLabels = labels.filter((l) => (seen.has(l) ? false : (seen.add(l), true)));
-          setPersonaOptions(uniqueLabels);
-        }
+        const segments: HelixSegment[] = rows
+          .map((row) => ({
+            id: String(row.id ?? row.code ?? row.label),
+            label: String(row.label ?? row.name ?? row.segment_name ?? row.title ?? row.code ?? row.slug ?? ''),
+            groupName: row.group_name ?? row.group ?? undefined,
+            description: row.description ?? undefined,
+          }))
+          .filter((s) => s.label && s.id);
+        if (segments.length > 0) setPersonaOptions(segments);
       } catch (err) {
         // Fall back to built-in list silently
-        console.error('Failed to load helix_persona_segments; using fallback list', err);
+        console.error('Failed to load helix_segments; using fallback list', err);
       } finally {
         setLoadingPersonas(false);
       }
@@ -107,7 +105,10 @@ export default function Form({ onSubmit, loading }: FormProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const location = `${formData.suburb}, ${formData.postcode}`;
-    const personaJoined = formData.persona.join(', ');
+    const idToLabel = new Map(personaOptions.map((s) => [s.id, s.label] as const));
+    const personaJoined = formData.persona
+      .map((id) => idToLabel.get(id) ?? id)
+      .join(', ');
     onSubmit({
       product: formData.product,
       description: formData.description,
@@ -180,11 +181,16 @@ export default function Form({ onSubmit, loading }: FormProps) {
             className="input-field"
             required
           >
-            {personaOptions.map((persona) => (
-              <option key={persona} value={persona}>
-                {persona}
-              </option>
-            ))}
+            {personaOptions.map((segment) => {
+              const parts = [segment.label, segment.groupName, segment.description]
+                .filter(Boolean)
+                .join(' — ');
+              return (
+                <option key={segment.id} value={segment.id} title={segment.description || ''}>
+                  {parts}
+                </option>
+              );
+            })}
           </select>
           <p className="mt-1 text-xs text-gray-500">
             {loadingPersonas ? 'Loading persona segments…' : 'Select one or more persona segments that fit your audience.'}
