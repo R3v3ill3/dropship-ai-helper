@@ -72,6 +72,7 @@ export default function Form({ onSubmit, loading }: FormProps) {
     HELIX_PERSONAS_FALLBACK.map((label) => ({ id: label, label }))
   );
   const [loadingPersonas, setLoadingPersonas] = useState<boolean>(false);
+  const [personasError, setPersonasError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchPersonaSegments() {
@@ -96,6 +97,7 @@ export default function Form({ onSubmit, loading }: FormProps) {
       } catch (err) {
         // Fall back to built-in list silently
         console.error('Failed to load helix_segments; using fallback list', err);
+        setPersonasError('Unable to load Helix segments from Supabase. Using fallback list. Check table existence, read policy, and NEXT_PUBLIC_SUPABASE_* env vars.');
       } finally {
         setLoadingPersonas(false);
       }
@@ -173,6 +175,11 @@ export default function Form({ onSubmit, loading }: FormProps) {
           <label htmlFor="persona" className="block text-sm font-medium text-gray-700 mb-2">
             Target Helix Persona Segments *
           </label>
+          {personasError && (
+            <div className="mb-3 rounded border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-800">
+              {personasError}
+            </div>
+          )}
           <select
             id="persona"
             multiple

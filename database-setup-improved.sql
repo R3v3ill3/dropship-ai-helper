@@ -5,8 +5,23 @@
 SET search_path = public;
 
 -- Drop existing tables if they exist (for clean setup)
+DROP TABLE IF EXISTS helix_segments CASCADE;
 DROP TABLE IF EXISTS outputs CASCADE;
 DROP TABLE IF EXISTS projects CASCADE;
+-- Create helix_segments reference table (public readable)
+CREATE TABLE helix_segments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  label TEXT NOT NULL,
+  group_name TEXT,
+  description TEXT
+);
+
+-- Enable RLS and allow public read for helix_segments
+ALTER TABLE helix_segments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can read helix_segments" ON helix_segments;
+CREATE POLICY "Anyone can read helix_segments" ON helix_segments
+  FOR SELECT USING (true);
+
 
 -- Create projects table with explicit column definitions
 CREATE TABLE projects (

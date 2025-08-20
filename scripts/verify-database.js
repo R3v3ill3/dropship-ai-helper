@@ -20,6 +20,29 @@ async function verifyDatabase() {
   const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
   try {
+    // Check if helix_segments table exists and is readable
+    console.log('📋 Checking helix_segments table structure...');
+    const { data: helixCheck, error: helixError } = await supabase
+      .from('helix_segments')
+      .select('label,group_name,description')
+      .limit(1);
+
+    if (helixError) {
+      console.error('❌ helix_segments table error:', helixError);
+      console.log('💡 Ensure a public-readable helix_segments table exists with columns label, group_name, description.');
+      console.log('   You can run the SQL in database-helix-segments.sql in your Supabase SQL editor.');
+    } else {
+      console.log('✅ helix_segments table is accessible');
+      if (helixCheck && helixCheck.length > 0) {
+        const row = helixCheck[0];
+        console.log('   Sample row:', {
+          label: row.label,
+          group_name: row.group_name,
+          description: row.description
+        });
+      }
+    }
+
     // Check if projects table exists and has the correct structure
     console.log('📋 Checking projects table structure...');
     const { data: projectsCheck, error: projectsError } = await supabase

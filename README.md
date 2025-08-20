@@ -197,7 +197,17 @@ dropship-ai-helper/
 ## Customization
 
 ### Adding New Helix Personas
-Edit the `HELIX_PERSONAS` array in `components/Form.tsx`
+The app now loads personas from the `helix_segments` table in Supabase (columns: `label`, `group_name`, `description`).
+
+- Add/edit rows in `public.helix_segments` for production data
+- The UI will fall back to a built-in list if the table is missing or unreadable
+- To create the table and a permissive read policy, run the SQL in `database-setup-improved.sql`
+
+To verify connectivity and table access locally:
+
+```bash
+npm run verify-db
+```
 
 ### Adding New Brand Tones
 Edit the `BRAND_TONES` array in `components/Form.tsx`
