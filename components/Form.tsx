@@ -154,6 +154,9 @@ export default function Form({ onSubmit, loading }: FormProps) {
       }
       const recommended: string[] = Array.isArray(data.recommendedSegments) ? data.recommendedSegments : [];
       const reasons: string = typeof data.reasoningSummary === 'string' ? data.reasoningSummary : '';
+      const aiName: string = typeof data.productName === 'string' ? data.productName : '';
+      const aiDesc: string = typeof data.productDescription === 'string' ? data.productDescription : '';
+      const isGeneric: boolean = Boolean(data.isGenericPage);
       // Map labels back to IDs (case-insensitive)
       const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
       const labelToId = new Map(personaOptions.map(s => [s.label, s.id] as const));
@@ -174,13 +177,17 @@ export default function Form({ onSubmit, loading }: FormProps) {
           ...toAdd.map(label => ({ id: label, label, groupName: 'Custom' as const }))
         ]));
       }
-      // Preselect recommended segments as defaults
+      // Preselect recommended segments as defaults and prefill product fields if empty
       setFormData(prev => ({
         ...prev,
+        product: prev.product || aiName || prev.product,
+        description: prev.description || aiDesc || prev.description,
         persona: Array.from(new Set([...(prev.persona || []), ...ids]))
       }));
-      if (recommended.length > 0) {
-        setAnalysisNote(`Recommended segments: ${recommended.join(', ')}${reasons ? ` — ${reasons}` : ''}`);
+      if (isGeneric) {
+        setAnalysisNote('The provided URL appears to be a generic page. Please provide a specific product page URL (e.g., /products/your-item).');
+      } else if (recommended.length > 0) {
+        setAnalysisNote(`Recommended segments: ${recommended.join(', ')}${reasons ? ` — ${reasons}` : ''}${aiName ? ` — Detected product: ${aiName}` : ''}`);
       } else {
         setAnalysisNote('No clear segments detected from the provided URL.');
       }
@@ -247,7 +254,7 @@ export default function Form({ onSubmit, loading }: FormProps) {
         {/* Website URL Analyzer */}
         <div>
           <label htmlFor="websiteUrl" className="block text-sm font-medium text-gray-700 mb-2">
-            Website URL (optional)
+            Product page URL (optional)
           </label>
           <div className="flex gap-2">
             <input
@@ -256,7 +263,7 @@ export default function Form({ onSubmit, loading }: FormProps) {
               value={formData.websiteUrl || ''}
               onChange={(e) => handleChange('websiteUrl', e.target.value)}
               className="input-field flex-1"
-              placeholder="https://yourstore.com"
+              placeholder="https://yourstore.com/products/wireless-headphones"
             />
             <button
               type="button"
@@ -267,6 +274,7 @@ export default function Form({ onSubmit, loading }: FormProps) {
               {analyzingUrl ? 'Analyzing…' : 'Analyze URL'}
             </button>
           </div>
+          <p className="mt-1 text-xs text-gray-500">Provide the URL to the specific product page you want to promote, not a generic homepage or collection page.</p>
           {analysisNote && (
             <p className="mt-2 text-xs text-gray-600">{analysisNote}</p>
           )}
@@ -511,4 +519,3 @@ export default function Form({ onSubmit, loading }: FormProps) {
     </div>
   );
 }
-

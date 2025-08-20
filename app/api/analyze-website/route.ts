@@ -42,29 +42,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing url' }, { status: 400 });
     }
     const normalized = url.startsWith('http://') || url.startsWith('https://') ? url : `https://${url}`;
-    let origin: URL;
+    let targetUrl: URL;
     try {
-      origin = new URL(normalized);
+      targetUrl = new URL(normalized);
     } catch {
       return NextResponse.json({ error: 'Invalid URL' }, { status: 400 });
     }
 
-    const candidatePaths = ['/', '/about', '/collections', '/products', '/shop', '/pages/about', '/pages/about-us', '/faq', '/contact'];
-    const htmlSnippets: string[] = [];
-    for (const path of candidatePaths) {
-      const pageUrl = new URL(path, origin.origin).toString();
-      const html = await fetchWithTimeout(pageUrl);
-      if (html) {
-        htmlSnippets.push(html);
-      }
-      if (htmlSnippets.length >= 5) break; // cap requests
-    }
-
-    if (htmlSnippets.length === 0) {
+    const html = await fetchWithTimeout(targetUrl.toString());
+    if (!html) {
       return NextResponse.json({ error: 'Failed to fetch website content' }, { status: 502 });
     }
 
-    const combined = stripHtml(htmlSnippets.join('\n\n'));
+    const combined = stripHtml(html);
     const truncated = combined.slice(0, 15000);
 
     const segmentsInput: string[] = Array.isArray(availableSegments) && availableSegments.length > 0
@@ -78,7 +68,18 @@ export async function POST(request: NextRequest) {
       topN: typeof topN === 'number' ? topN : 3
     });
 
-    return NextResponse.json({ success: true, ...result });
+    const isLikelyGenericUrl = (pathname: string) => {
+      const p = pathname.replace(/\/+$/,'').toLowerCase();
+      if (p === '' || p === '/') return true;
+      const generic = new Set([
+        '/home', '/index', '/collections', '/collection', '/products', '/product', '/shop', '/store', '/catalog', '/category', '/categories', '/about', '/about-us', '/pages/about', '/pages/about-us', '/faq', '/contact'
+      ]);
+      return generic.has(p);
+    };
+
+    const isGenericPage = isLikelyGenericUrl(targetUrl.pathname);
+
+    return NextResponse.json({ success: true, isGenericPage, analyzedUrl: targetUrl.toString(), ...result });
   } catch (error: any) {
     const message = error?.message || 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });

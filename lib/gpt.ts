@@ -152,6 +152,8 @@ export async function getBrandingOutput(input: BrandingInput): Promise<BrandingO
 export interface SegmentRecommendationResult {
   recommendedSegments: string[];
   reasoningSummary?: string;
+  productName?: string;
+  productDescription?: string;
 }
 
 export async function recommendSegmentsFromWebsite(params: {
@@ -233,7 +235,11 @@ export async function recommendSegmentsFromWebsite(params: {
     }
     const rec = Array.isArray(parsed.recommendedSegments) ? parsed.recommendedSegments.map((s: any) => String(s).trim()).filter(Boolean) : [];
     const reasoning = typeof parsed.reasoningSummary === 'string' ? parsed.reasoningSummary : undefined;
-    return { recommendedSegments: rec, reasoningSummary: reasoning };
+    const name = typeof parsed.productName === 'string' ? parsed.productName.trim() : '';
+    const desc = typeof parsed.productDescription === 'string' ? parsed.productDescription.trim() : '';
+    const productName = name.length > 0 ? name : undefined;
+    const productDescription = desc.length > 0 ? desc : undefined;
+    return { recommendedSegments: rec, reasoningSummary: reasoning, productName, productDescription };
   } catch (e) {
     console.error('Failed to parse segment recommendation:', response);
     throw new Error('Invalid response format from AI');
