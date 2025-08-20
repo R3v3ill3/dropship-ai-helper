@@ -16,13 +16,13 @@ export async function getBrandingOutput(input: BrandingInput): Promise<BrandingO
       'gpt-4.1-mini',
       'gpt-4.1'
     ]);
-    const model = supportedModels.has(envModel) ? envModel : 'gpt-4o-mini';
+    const model = supportedModels.has(envModel) ? envModel : 'gpt-4o';
     if (envModel && !supportedModels.has(envModel)) {
       // Do not throw; just warn and fall back to a known-good model
       console.warn(`Unsupported OPENAI_MODEL value '${envModel}'. Falling back to '${model}'.`);
     }
     const temperature = process.env.OPENAI_TEMPERATURE ? Number(process.env.OPENAI_TEMPERATURE) : 0.7;
-    const maxTokens = process.env.OPENAI_MAX_TOKENS ? Number(process.env.OPENAI_MAX_TOKENS) : 1200;
+    const maxTokens = process.env.OPENAI_MAX_TOKENS ? Number(process.env.OPENAI_MAX_TOKENS) : 2000;
     const prompt = generateBrandingPrompt(input);
     
     let response: string | null = null;
