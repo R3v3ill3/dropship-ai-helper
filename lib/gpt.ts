@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { generateBrandingPrompt, BrandingInput, BrandingOutput } from '../prompts/branding';
+import { generateMarketingPlanPrompt, MarketingPlanInput } from '../prompts/marketingPlan';
 import { generateSegmentRecommendationPrompt } from '../prompts/recommendSegments';
 
 export async function getBrandingOutput(input: BrandingInput): Promise<BrandingOutput> {
@@ -146,6 +147,97 @@ export async function getBrandingOutput(input: BrandingInput): Promise<BrandingO
       'Unknown error';
     console.error('Error calling OpenAI:', apiErrorMessage);
     throw new Error(`Failed to generate branding output: ${apiErrorMessage}`);
+  }
+}
+
+export type MarketingPlanOutput = any;
+
+export async function getMarketingPlanOutput(input: MarketingPlanInput): Promise<MarketingPlanOutput> {
+  try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error('Missing OpenAI API key');
+    }
+    const openai = new OpenAI({ apiKey });
+    const envModel = (process.env.OPENAI_MODEL || '').trim();
+    const supportedModels = new Set<string>([
+      'gpt-4o-mini',
+      'gpt-4o',
+      'gpt-4.1-mini',
+      'gpt-4.1'
+    ]);
+    const model = supportedModels.has(envModel) ? envModel : 'gpt-4o';
+    if (envModel && !supportedModels.has(envModel)) {
+      console.warn(`Unsupported OPENAI_MODEL value '${envModel}'. Falling back to '${model}'.`);
+    }
+    const temperature = process.env.OPENAI_TEMPERATURE ? Number(process.env.OPENAI_TEMPERATURE) : 0.5;
+    const maxTokens = process.env.OPENAI_MAX_TOKENS ? Number(process.env.OPENAI_MAX_TOKENS) : 4000;
+
+    const prompt = generateMarketingPlanPrompt(input);
+
+    let response: string | null = null;
+    try {
+      const completion = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a senior marketing strategist. Always respond with valid JSON only.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature,
+        max_tokens: maxTokens,
+        response_format: { type: 'json_object' }
+      });
+      response = completion.choices[0]?.message?.content ?? null;
+    } catch (jsonModeError: any) {
+      const msg = jsonModeError?.response?.data?.error?.message || jsonModeError?.message || '';
+      const indicatesUnsupported = /response_format|json(\s|-)?mode|not supported|Unsupported/i.test(msg);
+      if (!indicatesUnsupported) {
+        throw jsonModeError;
+      }
+      const completion = await openai.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a senior marketing strategist. Always respond with valid JSON only.' },
+          { role: 'user', content: prompt }
+        ],
+        temperature,
+        max_tokens: maxTokens
+      });
+      response = completion.choices[0]?.message?.content ?? null;
+    }
+
+    if (!response) {
+      throw new Error('No response from OpenAI');
+    }
+
+    // Parse JSON and return as-is. The consumer/UI can render selectively.
+    try {
+      let parsed: any;
+      try {
+        parsed = JSON.parse(response);
+      } catch (e) {
+        const firstBrace = response.indexOf('{');
+        const lastBrace = response.lastIndexOf('}');
+        if (firstBrace >= 0 && lastBrace > firstBrace) {
+          const maybeJson = response.slice(firstBrace, lastBrace + 1);
+          parsed = JSON.parse(maybeJson);
+        } else {
+          throw e;
+        }
+      }
+      return parsed as MarketingPlanOutput;
+    } catch (parseError) {
+      console.error('Failed to parse marketing plan response:', response);
+      throw new Error('Invalid response format from AI');
+    }
+  } catch (error: any) {
+    const apiErrorMessage =
+      error?.response?.data?.error?.message ||
+      error?.error?.message ||
+      error?.message ||
+      'Unknown error';
+    console.error('Error calling OpenAI (marketing plan):', apiErrorMessage);
+    throw new Error(`Failed to generate marketing plan: ${apiErrorMessage}`);
   }
 }
 
