@@ -81,8 +81,8 @@ export default function Form({ onSubmit, loading }: FormProps) {
         const supabase = getSupabaseClient();
         const { data, error } = await supabase
           .from('helix_segments')
-          // Select only columns that are guaranteed to exist to avoid query errors
-          .select('label,group_name,description');
+          // Include id for stable option values, plus label and optional metadata
+          .select('id,label,group_name,description');
         if (error) throw error;
         const rows: any[] = Array.isArray(data) ? data : [];
         const segments: HelixSegment[] = rows
@@ -189,16 +189,15 @@ export default function Form({ onSubmit, loading }: FormProps) {
             className="input-field"
             required
           >
-            {personaOptions.map((segment) => {
-              const parts = [segment.label, segment.groupName, segment.description]
-                .filter(Boolean)
-                .join(' — ');
-              return (
-                <option key={segment.id} value={segment.id} title={segment.description || ''}>
-                  {parts}
-                </option>
-              );
-            })}
+            {personaOptions.map((segment) => (
+              <option
+                key={segment.id}
+                value={segment.id}
+                title={[segment.groupName, segment.description].filter(Boolean).join(' — ')}
+              >
+                {segment.label}
+              </option>
+            ))}
           </select>
           <p className="mt-1 text-xs text-gray-500">
             {loadingPersonas ? 'Loading persona segments…' : 'Select one or more persona segments that fit your audience.'}
