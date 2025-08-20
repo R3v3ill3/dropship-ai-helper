@@ -80,7 +80,8 @@ export default function Form({ onSubmit, loading }: FormProps) {
         const supabase = getSupabaseClient();
         const { data, error } = await supabase
           .from('helix_segments')
-          .select('id,label,group_name,description');
+          // Select only columns that are guaranteed to exist to avoid query errors
+          .select('label,group_name,description');
         if (error) throw error;
         const rows: any[] = Array.isArray(data) ? data : [];
         const segments: HelixSegment[] = rows
