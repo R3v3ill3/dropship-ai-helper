@@ -72,6 +72,7 @@ export default function Form({ onSubmit, loading }: FormProps) {
     HELIX_PERSONAS_FALLBACK.map((label) => ({ id: label, label }))
   );
   const [loadingPersonas, setLoadingPersonas] = useState<boolean>(false);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
 
   useEffect(() => {
     async function fetchPersonaSegments() {
@@ -126,9 +127,49 @@ export default function Form({ onSubmit, loading }: FormProps) {
     }));
   };
 
-  const handlePersonaChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedValues = Array.from(event.target.selectedOptions).map(opt => opt.value);
-    setFormData(prev => ({ ...prev, persona: selectedValues }));
+  const uniqueGroupNames = React.useMemo(() => {
+    const names = new Set<string>();
+    for (const seg of personaOptions) {
+      if (seg.groupName && seg.groupName.trim().length > 0) names.add(seg.groupName.trim());
+    }
+    return Array.from(names).sort((a, b) => a.localeCompare(b));
+  }, [personaOptions]);
+
+  const displayGroupName = (groupName?: string) => groupName && groupName.trim() ? groupName.trim() : 'Ungrouped';
+
+  const filteredAndSortedSegments = React.useMemo(() => {
+    const hasGroupFilter = selectedGroups.length > 0;
+    const filtered = personaOptions.filter(seg => {
+      if (!hasGroupFilter) return true;
+      const name = displayGroupName(seg.groupName);
+      return selectedGroups.includes(name);
+    });
+    const sortByGroup = selectedGroups.length > 1;
+    const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
+    const byLabel = (a: HelixSegment, b: HelixSegment) => collator.compare(a.label, b.label);
+    if (sortByGroup) {
+      return filtered.sort((a, b) => {
+        const ga = displayGroupName(a.groupName);
+        const gb = displayGroupName(b.groupName);
+        const gcmp = collator.compare(ga, gb);
+        return gcmp !== 0 ? gcmp : byLabel(a, b);
+      });
+    }
+    return filtered.sort(byLabel);
+  }, [personaOptions, selectedGroups]);
+
+  const togglePersonaSelection = (id: string) => {
+    setFormData(prev => {
+      const exists = prev.persona.includes(id);
+      const next = exists ? prev.persona.filter(pid => pid !== id) : [...prev.persona, id];
+      return { ...prev, persona: next };
+    });
+  };
+
+  const isPersonaSelected = (id: string) => formData.persona.includes(id);
+
+  const toggleGroupFilter = (groupName: string) => {
+    setSelectedGroups(prev => prev.includes(groupName) ? prev.filter(g => g !== groupName) : [...prev, groupName]);
   };
 
   return (
@@ -170,32 +211,116 @@ export default function Form({ onSubmit, loading }: FormProps) {
 
         {/* Target Audience */}
         <div>
-          <label htmlFor="persona" className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Target Helix Persona Segments *
           </label>
-          <select
-            id="persona"
-            multiple
-            size={Math.min(8, Math.max(4, personaOptions.length))}
-            value={formData.persona}
-            onChange={handlePersonaChange}
-            className="input-field"
-            required
-          >
-            {personaOptions.map((segment) => {
-              const parts = [segment.label, segment.groupName, segment.description]
-                .filter(Boolean)
-                .join(' — ');
-              return (
-                <option key={segment.id} value={segment.id} title={segment.description || ''}>
-                  {parts}
-                </option>
-              );
-            })}
-          </select>
+          {/* Group Filters */}
+          <div className="mb-3">
+            <div className="text-xs font-medium text-gray-600 mb-1">Filter by Group</div>
+            <div className="flex flex-wrap gap-2">
+              {uniqueGroupNames.length === 0 ? (
+                <span className="text-xs text-gray-500">No groups available</span>
+              ) : (
+                uniqueGroupNames.map((group) => (
+                  <label key={group} className="inline-flex items-center gap-1 text-sm">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={selectedGroups.includes(group)}
+                      onChange={() => toggleGroupFilter(group)}
+                    />
+                    <span>{group}</span>
+                  </label>
+                ))
+              )}
+              {/* Include Ungrouped if present */}
+              {personaOptions.some(s => !s.groupName || !s.groupName.trim()) && (
+                <label className="inline-flex items-center gap-1 text-sm">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4"
+                    checked={selectedGroups.includes('Ungrouped')}
+                    onChange={() => toggleGroupFilter('Ungrouped')}
+                  />
+                  <span>Ungrouped</span>
+                </label>
+              )}
+            </div>
+          </div>
+
+          {/* Segments Table */}
+          <div className="border rounded-lg overflow-hidden">
+            <div className="bg-gray-50 px-3 py-2 text-xs font-semibold grid grid-cols-12 gap-2">
+              <div className="col-span-1"></div>
+              <div className="col-span-4">Segment</div>
+              <div className="col-span-3">Group</div>
+              <div className="col-span-4">Description</div>
+            </div>
+            <div className="max-h-64 overflow-y-auto divide-y">
+              {loadingPersonas && (
+                <div className="px-3 py-2 text-sm text-gray-500">Loading persona segments…</div>
+              )}
+              {!loadingPersonas && filteredAndSortedSegments.length === 0 && (
+                <div className="px-3 py-2 text-sm text-gray-500">No segments found for the selected filters.</div>
+              )}
+              {!loadingPersonas && filteredAndSortedSegments.map((segment) => (
+                <label key={segment.id} className="px-3 py-2 grid grid-cols-12 gap-2 items-start cursor-pointer hover:bg-gray-50">
+                  <div className="col-span-1 pt-1">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={isPersonaSelected(segment.id)}
+                      onChange={() => togglePersonaSelection(segment.id)}
+                    />
+                  </div>
+                  <div className="col-span-4 text-sm text-gray-900">{segment.label}</div>
+                  <div className="col-span-3 text-sm text-gray-700">{displayGroupName(segment.groupName)}</div>
+                  <div className="col-span-4 text-sm text-gray-600">{segment.description || ''}</div>
+                </label>
+              ))}
+            </div>
+          </div>
           <p className="mt-1 text-xs text-gray-500">
-            {loadingPersonas ? 'Loading persona segments…' : 'Select one or more persona segments that fit your audience.'}
+            {formData.persona.length === 0 ? 'Select at least one segment.' : `${formData.persona.length} segment(s) selected.`}
           </p>
+
+          {/* Summary Table */}
+          {formData.persona.length > 0 && (
+            <div className="mt-4">
+              <div className="text-sm font-medium text-gray-700 mb-2">Selected Segments</div>
+              <div className="border rounded-lg overflow-hidden">
+                <div className="bg-gray-50 px-3 py-2 text-xs font-semibold grid grid-cols-12 gap-2">
+                  <div className="col-span-5">Segment</div>
+                  <div className="col-span-3">Group</div>
+                  <div className="col-span-3">Description</div>
+                  <div className="col-span-1"></div>
+                </div>
+                <div className="divide-y">
+                  {formData.persona.map((id) => {
+                    const seg = personaOptions.find(s => s.id === id);
+                    if (!seg) return null;
+                    return (
+                      <div key={id} className="px-3 py-2 grid grid-cols-12 gap-2 items-start">
+                        <div className="col-span-5 text-sm text-gray-900">{seg.label}</div>
+                        <div className="col-span-3 text-sm text-gray-700">{displayGroupName(seg.groupName)}</div>
+                        <div className="col-span-3 text-sm text-gray-600">{seg.description || ''}</div>
+                        <div className="col-span-1 flex justify-end">
+                          <button
+                            type="button"
+                            className="text-xs text-red-600 hover:text-red-700 font-medium"
+                            onClick={() => togglePersonaSelection(id)}
+                            aria-label={`Remove ${seg.label}`}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Location */}
@@ -255,8 +380,9 @@ export default function Form({ onSubmit, loading }: FormProps) {
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || formData.persona.length === 0}
           className="w-full btn-primary py-3 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-disabled={loading || formData.persona.length === 0}
         >
           {loading ? 'Generating...' : 'Generate Branding Package'}
         </button>
