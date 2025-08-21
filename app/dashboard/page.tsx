@@ -6,7 +6,7 @@ import Form from '../../components/Form';
 import OutputDisplay from '../../components/OutputDisplay';
 import { BrandingOutput } from '../../prompts/branding';
 import { getSupabaseClient } from '../../lib/supabase';
-import { LogOut, Plus, History, Sparkles } from 'lucide-react';
+import { LogOut, Plus, History, Sparkles, ExternalLink, RotateCcw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface Project {
@@ -23,6 +23,7 @@ export default function Dashboard() {
   const [currentOutput, setCurrentOutput] = useState<BrandingOutput | null>(null);
   const [loading, setLoading] = useState(false);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
@@ -92,6 +93,86 @@ export default function Dashboard() {
   const handleRegenerate = () => {
     // For now, just clear the current output to show the form again
     setCurrentOutput(null);
+  };
+
+  const handleOpenProject = async (projectId: string) => {
+    try {
+      const { data: outputs, error } = await getSupabaseClient()
+        .from('outputs')
+        .select('*')
+        .eq('project_id', projectId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      if (outputs && outputs.length > 0) {
+        const o = outputs[0];
+        const branding: BrandingOutput = {
+          brandName: o.brand_name,
+          tagline: o.tagline,
+          landingPageCopy: o.landing_page_copy,
+          adHeadlines: o.ad_headlines,
+          tiktokScripts: o.tiktok_scripts,
+          adPlatforms: o.ad_platforms,
+          budgetStrategy: o.budget_strategy,
+        };
+        setCurrentOutput(branding);
+        setShowHistory(false);
+        setSelectedProjectId(projectId);
+      } else {
+        alert('No outputs found for this project yet. Try re-running it.');
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Failed to open project.');
+    }
+  };
+
+  const handleRerunProject = async (projectId: string) => {
+    try {
+      const { data: { session } } = await getSupabaseClient().auth.getSession();
+      const accessToken = session?.access_token;
+      const res = await fetch('/api/regenerate-branding', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+        },
+        body: JSON.stringify({ projectId }),
+      });
+      if (!res.ok) {
+        let details = '';
+        try { details = (await res.json())?.details || ''; } catch {}
+        throw new Error(`Failed to regenerate (HTTP ${res.status}) ${details}`);
+      }
+      const json = await res.json();
+      const branding: BrandingOutput = json.branding;
+      setCurrentOutput(branding);
+      setShowHistory(false);
+      setSelectedProjectId(projectId);
+      await fetchProjects();
+    } catch (e) {
+      console.error(e);
+      alert('Failed to re-run project.');
+    }
+  };
+
+  const handleDeleteProject = async (projectId: string) => {
+    if (!confirm('Delete this project and all its outputs?')) return;
+    try {
+      const { error } = await getSupabaseClient()
+        .from('projects')
+        .delete()
+        .eq('id', projectId);
+      if (error) throw error;
+      await fetchProjects();
+      if (selectedProjectId === projectId) {
+        setCurrentOutput(null);
+        setSelectedProjectId(null);
+      }
+    } catch (e) {
+      console.error(e);
+      alert('Failed to delete project.');
+    }
   };
 
   if (!user) {
@@ -194,9 +275,20 @@ export default function Dashboard() {
                           Created: {new Date(project.created_at).toLocaleDateString()}
                         </p>
                       </div>
-                      <button className="btn-secondary">
-                        View Details
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => handleOpenProject(project.id)} className="btn-secondary inline-flex items-center gap-2">
+                          <ExternalLink className="h-4 w-4" />
+                          Open
+                        </button>
+                        <button onClick={() => handleRerunProject(project.id)} className="btn-secondary inline-flex items-center gap-2">
+                          <RotateCcw className="h-4 w-4" />
+                          Re-run
+                        </button>
+                        <button onClick={() => handleDeleteProject(project.id)} className="btn-secondary inline-flex items-center gap-2">
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import jsPDF from 'jspdf';
 import { RefreshCw, Copy, Check } from 'lucide-react';
 import { BrandingOutput } from '../prompts/branding';
 
@@ -12,6 +13,78 @@ interface OutputDisplayProps {
 
 export default function OutputDisplay({ output, onRegenerate, loading }: OutputDisplayProps) {
   const [copiedField, setCopiedField] = React.useState<string | null>(null);
+  
+  const handleDownloadPdf = () => {
+    try {
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 40;
+      let cursorY = margin;
+
+      const addHeading = (text: string, size = 18) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(size);
+        doc.text(text, margin, cursorY);
+        cursorY += 24;
+      };
+
+      const addLabelValue = (label: string, value: string) => {
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        const labelText = `${label}`;
+        doc.text(labelText, margin, cursorY);
+        cursorY += 16;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        const lines = doc.splitTextToSize(value, pageWidth - margin * 2);
+        for (const line of lines) {
+          if (cursorY > doc.internal.pageSize.getHeight() - margin) {
+            doc.addPage();
+            cursorY = margin;
+          }
+          doc.text(line, margin, cursorY);
+          cursorY += 16;
+        }
+        cursorY += 8;
+      };
+
+      // Title
+      addHeading('Branding Package', 20);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      const generatedAt = `Generated on ${new Date().toLocaleString()}`;
+      doc.text(generatedAt, margin, cursorY);
+      cursorY += 24;
+
+      // Brand Identity
+      addHeading('Brand Identity');
+      addLabelValue('Brand Name', output.brandName);
+      addLabelValue('Tagline', output.tagline);
+      addLabelValue('Landing Page Copy', output.landingPageCopy);
+
+      // Ad Headlines
+      addHeading('Facebook/Google Ad Headlines');
+      output.adHeadlines.forEach((headline, idx) => {
+        addLabelValue(`Headline ${idx + 1}`, headline);
+      });
+
+      // TikTok Scripts
+      addHeading('TikTok Ad Scripts');
+      output.tiktokScripts.forEach((script, idx) => {
+        addLabelValue(`Script ${idx + 1}`, script);
+      });
+
+      // Ad Strategy
+      addHeading('Advertising Strategy');
+      addLabelValue('Recommended Platforms', output.adPlatforms.join(', '));
+      addLabelValue('Budget Strategy', output.budgetStrategy);
+
+      doc.save(`${output.brandName || 'branding'}-package.pdf`);
+    } catch (error) {
+      console.error('Failed to generate PDF:', error);
+      alert('Failed to generate PDF. Please try again.');
+    }
+  };
 
   const copyToClipboard = async (text: string, fieldName: string) => {
     try {
@@ -157,7 +230,7 @@ export default function OutputDisplay({ output, onRegenerate, loading }: OutputD
         >
           {loading ? 'Generating...' : 'Generate New Version'}
         </button>
-        <button className="btn-secondary px-8 py-3 text-lg">
+        <button onClick={handleDownloadPdf} className="btn-secondary px-8 py-3 text-lg">
           Download PDF
         </button>
       </div>
